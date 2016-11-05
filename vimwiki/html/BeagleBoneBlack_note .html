@@ -1,0 +1,227 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<link rel="Stylesheet" type="text/css" href="style.css">
+<title>BeagleBoneBlack_note </title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+</head>
+<body>
+
+
+
+<p>
+BeagleBone Black u-boot print 信息分析及总结
+</p>
+
+<p>
+2013年05月18日 西安 Thomas Yang Mail:thomas.yang.zp@gmail.com
+</p>
+
+<p>
+U-Boot# print
+arch=arm
+baudrate=115200
+</p>
+
+<p>
+board=am335x  ----&gt;cpu 型号系列
+board_name=A335BNLT  ----&gt;板子名字
+board_rev=0A5A   ----&gt;板子硬件版本，可用于开源资料检索
+默认启动命令bootcmd ;
+bootcmd=gpio set 53; i2c mw 0x24 1 0x3e; run findfdt; mmc dev 0; if mmc rescan ; then echo micro SD card found;setenv mm
+cdev 0;else echo No micro SD card found, setting mmcdev to 1;setenv mmcdev 1;fi;setenv bootpart \({mmcdev}:2;mmc dev \){mm
+cdev}; if mmc rescan; then gpio set 54; echo SD/MMC found on device ${mmcdev};if run loadbootenv; then echo Loaded envir
+onment from \({bootenv};run importbootenv;fi;if test -n \)uenvcmd; then echo Running uenvcmd ...;run uenvcmd;fi;gpio set 5
+5; if run loaduimage; then gpio set 56; run loadfdt;run mmcboot;fi;fi;
+</p>
+
+<p>
+bootcmd分析结论：
+gpio set 53;
+i2c mw 0x24 1 0x3e; 
+run findfdt;
+mmc dev 0 ;
+if mmc rescan; then echo micro SD card found;setenv mmcdev 0;====&gt;检查micro外置sd卡是否存在，如果存在，那么设置从外置micro sd卡启动；
+else echo No micro SD card found, setting mmcdev to 1;set mmcdev 1;fi; =====&gt;否则，设置从内置emmc 启动；
+setenv bootpart ${mmcdev}:2 ;=====&gt; 无论是从外置micro sd卡启动，还是从内置emmc启动，设置启动分区为第二个分区；-----&gt;这个与制作sd卡时的分区有关；
+</p>
+
+<p>
+mmc dev \({mmcdev};if mmc rescan; then gpio set 54; echo SD/MMC found on device \){mmcdev};
+	if run loadbootenv; then echo Loaded environment from ${bootenv};run importbootenv;
+	fi;
+	if test -n $uenvcmd; then echo Running uenvcmd ...;run uenvcmd;
+	fi;
+	gpio set 55;
+	if run loaduimage; then gpio set 56; run loadfdt;run mmcboot;
+	fi;
+fi;
+</p>
+
+
+<p>
+bootdelay=1
+bootdir=/boot
+bootenv=uEnv.txt
+bootfile=uImage
+bootpart=0:2
+console=ttyO0,115200n8
+</p>
+
+<p>
+cpu=armv7
+ethact=cpsw
+ethaddr=c8:a0:30:a7:bd:7f
+</p>
+
+<p>
+fdt_high=0xffffffff
+fdtaddr=0x80F80000
+fdtfile=am335x-boneblack.dtb
+fileaddr=80007fc0
+filesize=409428
+</p>
+
+<p>
+findfdt=if test \(board_name = A335BONE; then setenv fdtfile am335x-bone.dtb; fi; if test \)board_name = A335BNLT; 
+then setenv fdtfile am335x-boneblack.dtb; fi; if test \(board_name = A33515BB; then setenv fdtfile am335x-evm.dtb; fi; if test \)
+board_name = A335X_SK; then setenv fdtfile am335x-evmsk.dtb; fi
+findfdt :依据bootloader中板子的名字设定fdt文件的名字，BeagleBone Black板子的名字是A335BNLT,与之对应的fdt文件的名字为am335x-boneblack.dtb;
+</p>
+
+<p>
+importbootenv=echo Importing environment from mmc ...; env import -t \(loadaddr \)filesize
+</p>
+
+<p>
+ipaddr=192.168.2.6
+</p>
+
+<p>
+kloadaddr=0x80007fc0
+loadaddr=0x80200000
+</p>
+
+<p>
+loadbootenv=load mmc \({mmcdev} \){loadaddr} ${bootenv} ====&gt; load mmc 设备号 bootenv内存load地址 bootenv文件名；
+</p>
+
+<p>
+loadfdt=load mmc \({bootpart} \){fdtaddr} \({bootdir}/\){fdtfile} ====&gt; load mmc 设备号：分区号  fdt内存存放地址 fdt文件在设备分区上的路径；
+</p>
+
+<p>
+loadramdisk=load mmc \({mmcdev} \){rdaddr} ramdisk.gz
+loaduimage=load mmc \({bootpart} \){kloadaddr} \({bootdir}/\){bootfile}
+</p>
+
+<p>
+#mmc boot相关设置
+mmcargs=setenv bootargs console=\({console} \){optargs} root=\({mmcroot} rootfstype=\){mmcrootfstype}
+mmcboot=echo Booting from mmc ...; run mmcargs; bootm \({kloadaddr} - \){fdtaddr}
+mmcdev=0
+mmcroot=/dev/mmcblk0p2 ro
+mmcrootfstype=ext4 rootwait
+</p>
+
+<p>
+#nand boot相关设置
+nandargs=setenv bootargs console=\({console} \){optargs} root=\({nandroot} rootfstype=\){nandrootfstype}
+nandboot=echo Booting from nand ...; run nandargs; nand read \({loadaddr} \){nandsrcaddr} \({nandimgsize}; bootm \){loadaddr}
+nandimgsize=0x500000
+nandroot=ubi0:rootfs rw ubi.mtd=7,2048
+nandrootfstype=ubifs rootwait=1
+nandsrcaddr=0x280000
+</p>
+
+<p>
+#NFS boot相关设置
+rootpath=/export/rootfs
+serverip=192.168.2.101
+netargs=setenv bootargs console=\({console} \){optargs} root=/dev/nfs nfsroot=\({serverip}:\){rootpath},${nfsopts} rw ip=dhcp
+netboot=echo Booting from network ...; setenv autoload no; dhcp; tftp \({loadaddr} \){bootfile}; tftp \({fdtaddr} \){fdtfile}; run netargs; bootm \({loadaddr} - \){fdtaddr}
+nfsopts=nolock
+</p>
+
+<p>
+#ramdisk相关设置
+ramargs=setenv bootargs console=\({console} \){optargs} root=\({ramroot} rootfstype=\){ramrootfstype}
+ramboot=echo Booting from ramdisk ...; run ramargs; bootm \({loadaddr} \){rdaddr} ${fdtaddr}
+ramroot=/dev/ram0 rw ramdisk_size=65536 initrd=${rdaddr},64M
+ramrootfstype=ext2
+rdaddr=0x81000000
+</p>
+
+
+<p>
+soc=am33xx
+</p>
+
+<p>
+#spi 启动相关设置
+spiargs=setenv bootargs console=\({console} \){optargs} root=\({spiroot} rootfstype=\){spirootfstype}
+spiboot=echo Booting from spi ...; run spiargs; sf probe \({spibusno}:0; sf read \){loadaddr} \({spisrcaddr} \){spiimgsize}; bootm ${loadaddr}
+spibusno=0
+spiimgsize=0x362000
+spiroot=/dev/mtdblock4 rw
+spirootfstype=jffs2
+spisrcaddr=0xe0000
+</p>
+
+<p>
+static_ip=\({ipaddr}:\){serverip}:\({gatewayip}:\){netmask}:${hostname}::off
+</p>
+
+<p>
+stderr=serial
+stdin=serial
+stdout=serial
+usbnet_devaddr=c8:a0:30:a7:bd:7f
+vendor=ti
+ver=U-Boot 2013.04-rc1-14237-g90639fe-dirty (Apr 13 2013 - 13:57:11)
+</p>
+
+<p>
+Environment size: 3474/131068 bytes
+</p>
+
+<p>
+U-Boot# bdinfo
+arch_number = 0x00000E05 ---&gt;与linux kernel进行配
+boot_params = 0x80000100 ---&gt;bootargs也就是要传给kernel的参数存放位置，当系统从bootloader跳转到linux kernel之后，linux kenerl中这个位置读取启动参数，如cmdline等；
+DRAM bank   = 0x00000000
+-&gt; start    = 0x80000000  内存起始地址
+-&gt; size     = 0x20000000  内存大小 ---&gt;512MBytes
+</p>
+<blockquote>
+内存地址范围：0x80000000 -----&gt;0x9fffffff
+</blockquote>
+<p>
+eth0name    = cpsw
+ethaddr     = c8:a0:30:a7:bd:7f
+eth1name    = usb_ether
+eth1addr    = (not set)
+current eth = cpsw
+ip_addr     = &lt;NULL&gt;
+baudrate    = 115200 bps
+下面这些地址信息为u-boot board.c 文件中的board_init_f()函数中计算得出；
+TLB addr    = 0x9FFF0000
+relocaddr   = 0x9FF63000   -----&gt;u-boot启动过程中，需要将u-boot自身搬移一次，这个就是搬移后的目标位置起始地址；
+reloc off   = 0x1F763000   -----&gt;u-boot 搬移后目标位置起始地址相对内存起始地址的偏移，主要用于搬移过程中的计算；
+irq_sp      = 0x9FE42F40   -----&gt;中断使用的sp起始地址；
+sp start    = 0x9FE42F30   -----&gt;最终的C语言运行环境中的栈起始地址，不过栈是向下增长，所以栈的分配从这个地址开始向下计算；
+tftp load linux kernel and start kernel :
+1. setenv autoload no
+2. setenv serverip 192.168.2.101
+3. setenv ipaddr 192.168.2.6
+4. tftp \({loadaddr} \){bootfile}
+5. tftp \({fdtaddr} \){fdtfile}
+6. run netargs ----&gt;这一步视情况可以改为，run mmcargs,nandargs,ramargs,主要看文件系统(rootfs)存放位置；
+7. bootm \({loadaddr} - \){fdtaddr}
+以上七个步骤，必须全部执行；2，3步必须先于4，5，7步执行；7，必须为最后一步执行；
+setenv autoload no;setenv serverip 192.168.2.101;setenv ipaddr 192.168.2.6;tftp \({loadaddr} \){bootfile};tftp \({fdtaddr} \){fdtfile};setenv rootpath /opt/bbbnfs
+setenv bootargs console=\({console} \){optargs} root=/dev/nfs init=/init nfsroot=\({serverip}:\){rootpath},\({nfsopts} rw ip=dhcp;bootm \){loadaddr} - ${fdtaddr}
+</p>
+
+</body>
+</html>
